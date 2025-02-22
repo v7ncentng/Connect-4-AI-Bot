@@ -1,4 +1,5 @@
 import random
+import time
 import pygame
 from copy import deepcopy
 import math
@@ -157,218 +158,249 @@ class minimaxAI(connect4Player):
 				min_eval = min(min_eval, eval)
 			return min_eval
   
-  
 class alphaBetaAI(connect4Player):
 	def __init__(self, position, seed=0, CVDMode=False):
 		super().__init__(position, seed, CVDMode)
-		self.transposition_table = {}  # Cache for positions we've already evaluated
+		self.transposition_table = {}
 		self.MAX_SCORE = 1000000
+		self.start_time = 0
+		self.time_limit = 2.8  # Buffer for 3 second limit
 		
 	def play(self, env: connect4, move_dict: dict) -> None:
-		max_depth = 6  # Increased depth since we've optimized the algorithm
+		import time
+		self.start_time = time.time()
 		
-		valid_moves = self.get_valid_moves(env)
+		# Get valid moves using the environment's topPosition
+		valid_moves = [i for i, pos in enumerate(env.topPosition) if pos >= 0]
 		if not valid_moves:
 			move_dict['move'] = 0
 			return
 			
-		# Order moves by their initial evaluation
-		move_scores = self.order_moves(env, valid_moves)
-		ordered_moves = [move for _, move in move_scores]
+		if all(env.board[env.shape[0]-1][col] == 0 for col in range(env.shape[1])):
+			if 3 in valid_moves:
+				move_dict['move'] = 3
+				return
 		
-		best_move = ordered_moves[0]  # Default to highest scored move
+		best_move = valid_moves[0]
+		depth = 1
 		
-		# Iterative deepening with time control
-		for current_depth in range(2, max_depth + 1):
-			alpha = float('-inf')
-			beta = float('inf')
-			current_best_move = self.find_best_move(env, ordered_moves, current_depth, alpha, beta)
+		try:
+			# Iterative deepening
+			while time.time() - self.start_time < self.time_limit and depth <= 8:
+				current_best = self.find_best_move(env, valid_moves, depth)
+				if current_best is not None:
+					best_move = current_best
+				depth += 1
+				
+		except TimeoutError:
+			pass
 			
-			if current_best_move is not None:
-				best_move = current_best_move
-		
 		move_dict['move'] = best_move
-
-	def get_valid_moves(self, env) -> list:
-		"""Returns list of valid column moves."""
-		return [i for i in range(env.shape[1]) if env.topPosition[i] >= 0]
-
-	def order_moves(self, env, valid_moves) -> list:
-		"""Orders moves based on initial evaluation."""
-		move_scores = []
-		for move in valid_moves:
-			self.make_move(env, move, self.position)
-			score = self.evaluate_quick(env)
-			move_scores.append((score, move))
-			self.undo_move(env, move)
+		
+	def find_best_move(self, env, moves, depth):
+		if time.time() - self.start_time > self.time_limit:
+			raise TimeoutError
 			
-		return sorted(move_scores, reverse=True)
-
-	def find_best_move(self, env, moves, depth, alpha, beta) -> int:
-		"""Finds the best move at the current depth."""
 		best_value = float('-inf')
 		best_move = None
+		alpha = float('-inf')
+		beta = float('inf')
 		
-		for move in moves:
-			self.make_move(env, move, self.position)
-			value = self.alpha_beta(env, depth - 1, alpha, beta, False)
-			self.undo_move(env, move)
-			
-			if value > best_value:
-				best_value = value
-				best_move = move
-			alpha = max(alpha, value)
+		# Order moves with center preference
+		ordered_moves = self.order_moves(env, moves)
+		
+		for move in ordered_moves:
+			env_copy = env.getEnv()
+			row = env_copy.topPosition[move]
+			if row >= 0:  # Validity check
+				env_copy.board[row][move] = self.position
+				env_copy.topPosition[move] -= 1
+				
+				value = self.alpha_beta(env_copy, depth - 1, alpha, beta, False, move)
+				
+				if value > best_value:
+					best_value = value
+					best_move = move
+				alpha = max(alpha, value)
 			
 		return best_move
-
-	def alpha_beta(self, env, depth, alpha, beta, maximizing) -> int:
-		"""Implements alpha-beta pruning algorithm."""
-		board_hash = self.hash_position(env)
 		
-		if board_hash in self.transposition_table:
-			cached_depth, cached_value = self.transposition_table[board_hash]
-			if cached_depth >= depth:
-				return cached_value
-		
-		# Check if this is a terminal state first
-		if env.gameOver:
-			return self.evaluate_terminal(env, depth)
+	def order_moves(self, env, valid_moves):
+		move_scores = []
+		for move in valid_moves:
+			if move < 0 or move >= env.shape[1]:  # Check valid column
+				continue
+				
+			row = env.topPosition[move]
+			if row < 0:  # Check if column is full
+				continue
+				
+			score = 0
 			
+			# Prefer center columns
+			score += (6 - abs(3 - move)) * 3
+			
+			# Check for winning move
+			env_copy = env.getEnv()
+			env_copy.board[row][move] = self.position
+			if self.check_win(env_copy, row, move, self.position):
+				score += 1000
+				
+			# Check for blocking move
+			env_copy = env.getEnv()
+			env_copy.board[row][move] = 3 - self.position
+			if self.check_win(env_copy, row, move, 3 - self.position):
+				score += 500
+				
+			move_scores.append((score, move))
+			
+		return [move for _, move in sorted(move_scores, reverse=True)]
+		
+	def check_win(self, env, row, col, player):
+		# Horizontal
+		count = 0
+		for c in range(max(0, col-3), min(col+4, env.shape[1])):
+			if env.board[row][c] == player:
+				count += 1
+			else:
+				count = 0
+			if count >= 4:
+				return True
+				
+		# Vertical
+		count = 0
+		for r in range(max(0, row-3), min(row+4, env.shape[0])):
+			if env.board[r][col] == player:
+				count += 1
+			else:
+				count = 0
+			if count >= 4:
+				return True
+				
+		# Check Diagonal (positive slope)
+		count = 0
+		for i in range(-3, 4):
+			r = row + i
+			c = col + i
+			if 0 <= r < env.shape[0] and 0 <= c < env.shape[1]:
+				if env.board[r][c] == player:
+					count += 1
+				else:
+					count = 0
+				if count >= 4:
+					return True
+					
+		# Check diagonal (negative slope)
+		count = 0
+		for i in range(-3, 4):
+			r = row + i
+			c = col - i
+			if 0 <= r < env.shape[0] and 0 <= c < env.shape[1]:
+				if env.board[r][c] == player:
+					count += 1
+				else:
+					count = 0
+				if count >= 4:
+					return True
+					
+		return False
+		
+	def alpha_beta(self, env, depth, alpha, beta, maximizing, last_move):
+		if time.time() - self.start_time > self.time_limit:
+			raise TimeoutError
+			
+		if last_move is not None:
+			last_row = 0
+			for row in range(env.shape[0]):
+				if env.board[row][last_move] != 0:
+					last_row = row
+					break
+			if self.check_win(env, last_row, last_move, 3 - self.position if maximizing else self.position):
+				return -self.MAX_SCORE if maximizing else self.MAX_SCORE
+				
 		if depth == 0:
 			return self.evaluate_position(env)
-		
-		valid_moves = self.get_valid_moves(env)
-		value = float('-inf') if maximizing else float('inf')
-		player = self.position if maximizing else 3 - self.position
-		
-		for move in valid_moves:
-			self.make_move(env, move, player)
-			child_value = self.alpha_beta(env, depth - 1, alpha, beta, False)
-			self.undo_move(env, move)
 			
-			if maximizing:
-				value = max(value, child_value)
-				alpha = max(alpha, value)
-			else:
-				value = min(value, child_value)
-				beta = min(beta, value)
-				
-			if alpha >= beta:
-				break
+		valid_moves = [i for i, pos in enumerate(env.topPosition) if pos >= 0]
 		
-		self.transposition_table[board_hash] = (depth, value)
-		return value
-
-	def make_move(self, env, col, player) -> None:
-		"""Makes a move on the board."""
-		env.board[env.topPosition[col]][col] = player
-		env.topPosition[col] -= 1
-
-	def undo_move(self, env, col) -> None:
-		"""Undoes the last move made in the column."""
-		env.topPosition[col] += 1
-		env.board[env.topPosition[col]][col] = 0
-
-	def evaluate_quick(self, env) -> int:
-		"""Quick positional evaluation for move ordering."""
-		score = 0
-		for col in range(env.shape[1]):
-			for row in range(env.shape[0]):
-				if env.board[row][col] == self.position:
-					score += self.weight[row][col]
-		return score
-
-	def evaluate_position(self, env) -> int:
-		"""Thorough position evaluation for leaf nodes."""
-		score = 0
-		directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
-		
-		for row in range(env.shape[0]):
-			for col in range(env.shape[1]):
-				piece = env.board[row][col]
-				if piece == 0:
-					continue
-				
-				for dx, dy in directions:
-					score += self.evaluate_line(env, row, col, dx, dy, piece)
-		
-		return score
-
-	def evaluate_line(self, env, row, col, dx, dy, piece) -> int:
-		"""Evaluates a line in a given direction."""
-		count = 1
-		blocked = 0
-		
-		# Check both directions
-		for factor in [1, -1]:
-			r, c = row + factor * dx, col + factor * dy
-			while (0 <= r < env.shape[0] and 0 <= c < env.shape[1] and 
-				count < 4):
-				if env.board[r][c] != piece:
-					if env.board[r][c] != 0:
-						blocked += 1
-					break
-				count += 1
-				r, c = r + factor * dx, c + factor * dy
-		
-		multiplier = 1 if piece == self.position else -1
-		if count >= 4:
-			return self.MAX_SCORE * multiplier
-		elif count == 3 and blocked < 2:
-			return 100 * multiplier
-		elif count == 2 and blocked < 2:
-			return 10 * multiplier
-		return 0
-
-	def evaluate_terminal(self, env, depth) -> int:
-		"""Evaluates terminal game positions."""
-		# Check for 4-in-a-row
-		for row in range(env.shape[0]):
-			for col in range(env.shape[1]):
-				if env.board[row][col] == 0:
-					continue
-					
-				# Check horizontal
-				if col <= env.shape[1] - 4:
-					if all(env.board[row][col+i] == self.position for i in range(4)):
-						return self.MAX_SCORE + depth
-					if all(env.board[row][col+i] == 3-self.position for i in range(4)):
-						return -self.MAX_SCORE - depth
-				
-				# Check vertical
-				if row <= env.shape[0] - 4:
-					if all(env.board[row+i][col] == self.position for i in range(4)):
-						return self.MAX_SCORE + depth
-					if all(env.board[row+i][col] == 3-self.position for i in range(4)):
-						return -self.MAX_SCORE - depth
-				
-				# Check diagonal right
-				if col <= env.shape[1] - 4 and row <= env.shape[0] - 4:
-					if all(env.board[row+i][col+i] == self.position for i in range(4)):
-						return self.MAX_SCORE + depth
-					if all(env.board[row+i][col+i] == 3-self.position for i in range(4)):
-						return -self.MAX_SCORE - depth
-				
-				# Check diagonal left
-				if col >= 3 and row <= env.shape[0] - 4:
-					if all(env.board[row+i][col-i] == self.position for i in range(4)):
-						return self.MAX_SCORE + depth
-					if all(env.board[row+i][col-i] == 3-self.position for i in range(4)):
-						return -self.MAX_SCORE - depth
-		
-		# If no winner, check if board is full (draw)
-		if all(env.topPosition[col] < 0 for col in range(env.shape[1])):
+		if not valid_moves:  # Draw
 			return 0
 			
-		# If we get here, game isn't over despite gameOver being True
-		# Return a neutral evaluation
-		return self.evaluate_position(env)
-
-	def hash_position(self, env) -> str:
-		"""Creates a unique hash of the current board state."""
-		return ''.join(str(cell) for row in env.board for cell in row)
-
-
+		if maximizing:
+			value = float('-inf')
+			for move in valid_moves:
+				row = env.topPosition[move]
+				if row >= 0:
+					env_copy = env.getEnv()
+					env_copy.board[row][move] = self.position
+					env_copy.topPosition[move] -= 1
+					
+					value = max(value, self.alpha_beta(env_copy, depth - 1, alpha, beta, False, move))
+					alpha = max(alpha, value)
+					if alpha >= beta:
+						break
+			return value
+		else:
+			value = float('inf')
+			for move in valid_moves:
+				row = env.topPosition[move]
+				if row >= 0:
+					env_copy = env.getEnv()
+					env_copy.board[row][move] = 3 - self.position
+					env_copy.topPosition[move] -= 1
+					
+					value = min(value, self.alpha_beta(env_copy, depth - 1, alpha, beta, True, move))
+					beta = min(beta, value)
+					if alpha >= beta:
+						break
+			return value
+			
+	def evaluate_position(self, env):
+		score = 0
+		
+		for row in range(env.shape[0]):
+			for col in range(env.shape[1] - 3):
+				window = [env.board[row][col+i] for i in range(4)]
+				score += self.evaluate_window(window)
+				
+		for row in range(env.shape[0] - 3):
+			for col in range(env.shape[1]):
+				window = [env.board[row+i][col] for i in range(4)]
+				score += self.evaluate_window(window)
+				
+		for row in range(env.shape[0] - 3):
+			for col in range(env.shape[1] - 3):
+				window = [env.board[row+i][col+i] for i in range(4)]
+				score += self.evaluate_window(window)
+				
+		for row in range(3, env.shape[0]):
+			for col in range(env.shape[1] - 3):
+				window = [env.board[row-i][col+i] for i in range(4)]
+				score += self.evaluate_window(window)
+				
+		center_col = env.shape[1] // 2
+		center_array = [env.board[row][center_col] for row in range(env.shape[0])]
+		score += sum(1 for piece in center_array if piece == self.position) * 3
+		
+		return score
+		
+	def evaluate_window(self, window):
+		score = 0
+		player_pieces = window.count(self.position)
+		opponent_pieces = window.count(3 - self.position)
+		empty_pieces = window.count(0)
+		
+		if player_pieces == 4:
+			score += 100
+		elif player_pieces == 3 and empty_pieces == 1:
+			score += 5
+		elif player_pieces == 2 and empty_pieces == 2:
+			score += 2
+			
+		if opponent_pieces == 3 and empty_pieces == 1:
+			score -= 4
+			
+		return score
 # Defining Constants
 SQUARESIZE = 100
 BLUE = (0,0,255)
