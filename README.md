@@ -9,9 +9,9 @@ Pygame code used with permission from Keith Galli.
 Refer to Keith Galli's Connect 4 Python for licensing. https://github.com/KeithGalli/Connect4-Python
 
 Different commands available to use: 
--p1 -> Agent who will be acting as player 1. Name of agent eg alphaBetaAI  default type: HumanGUI \n
--p2 -> Agent who will be acting as player 2. 
--seed -> Seed for AI’s with stochastic elements
+-p1 -> Agent who will be acting as player 1. Name of agent eg alphaBetaAI  default type: HumanGUI ##
+-p2 -> Agent who will be acting as player 2.  ##
+-seed -> Seed for AI’s with stochastic elements ##
 -w -> Rows of gameboard (default: 6)
 -l -> Columns of gameboard (default: 7)
 -visualize (Bool) -> Bool to use or not use GUI
