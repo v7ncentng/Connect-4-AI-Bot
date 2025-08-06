@@ -410,13 +410,13 @@ class alphaBetaAI(connect4Player):
 
 			# Check if this move wins the game for self
 			env.board[temp_row][move] = self.position
-			if env.check_win(env.board, temp_row, move, self.position):
+			if self.check_win_at_position(env.board, temp_row, move, self.position, env.shape):
 				score += 10000 # Large score for winning move
 			env.board[temp_row][move] = 0 # Undo temp move
 
 			# Check if this move blocks opponent from winning
 			env.board[temp_row][move] = 3 - self.position
-			if env.check_win(env.board, temp_row, move, 3 - self.position):
+			if self.check_win_at_position(env.board, temp_row, move, 3 - self.position, env.shape):
 				score += 5000 # Large score for blocking move
 			env.board[temp_row][move] = 0 # Undo temp move
 
@@ -425,84 +425,26 @@ class alphaBetaAI(connect4Player):
 		# Sort moves by score in descending order
 		return [move for score, move in sorted(move_scores, key=lambda x: x[0], reverse=True)]
 
-
 	def alpha_beta(self, env, depth, alpha, beta, maximizing):
 		if time.time() - self.start_time > self.time_limit:
 			raise TimeoutError("Time limit exceeded during alpha_beta recursion")
 
-		# Determine the player who just made the move leading to this state
-		# This is complex in a general minimax where you don't pass `last_move_player`
-		# A simpler way is to check if the current `env` state itself is a terminal state.
-		# If the game is over, evaluate based on winner/tie.
-		# We assume that `env.gameOver` is called on the state *before* a new move is made.
-		# For minimax, we're checking if the state *after* a move is a win for the player
-		# who made that move.
+		# Check for terminal states
+		# Check if current player (maximizing) won
+		if maximizing:
+			current_player = self.position
+		else:
+			current_player = 3 - self.position
 
-		# It's better to check terminal states (win/loss/tie) on the current 'env' after a move is applied
-		# during the recursive calls. The `gameOver` in connect4 needs the last move to check efficiently.
-		# Here, we can simulate `gameOver` by checking wins for both players.
-		
-		# Check if the player who just moved won (this depends on whose turn it was *before* this minimax call)
-		# If maximizing is True, it means it's current player's turn (self.position).
-		# If maximizing is False, it means it's opponent's turn (3 - self.position).
-		# So, the player who just moved is (3 - self.position) if maximizing, or self.position if not maximizing.
-
-		# This check is tricky. It's usually better to determine the winner *after* the move.
-		# Given how `connect4.gameOver` is structured (needs `j` and `player`), we need a simpler win check.
-		# Using `env.check_win` on the current board state.
-
-		# Check for winning state for the *previous* player (the one who just made the move to reach this state)
-		# If maximizing is True, it means current turn is self.position, so the previous player was 3-self.position
-		# If maximizing is False, it means current turn is 3-self.position, so the previous player was self.position
-		
-		# A more robust check for a terminal node in minimax is to evaluate the board directly for wins.
-		# It's difficult to know the `last_move` (col) and `row` in `alpha_beta` without passing it,
-		# so we need a more general `check_win` that scans the whole board.
-		# I will use a simplified check here, or assume `env.gameOver` works for this.
-		
-		# If the state represents a win for the current maximizing player:
-		# This means the *opponent* of the current maximizing player (the player who just moved) won.
-		# So, if maximizing is True (current player is self), and opponent won, return -MAX_SCORE.
-		# If maximizing is False (current player is opponent), and self won, return MAX_SCORE.
-
-		# The `connect4.gameOver` modifies `env.is_winner`. We need to reset it.
-		
-		# To avoid deepcopying env repeatedly in alpha_beta, we modify `env` and then undo.
-		# So, `env` is the mutable board state for the current path.
-		
-		# Check for win for the player whose turn it *was* before the last hypothetical move.
-		# If maximizing (current player is `self.position`), the previous player was `3 - self.position`.
-		# If not maximizing (current player is `3 - self.position`), the previous player was `self.position`.
-		
-		# To correctly check for a win in the current state for the player who just made a move:
-		# We need the last move to call `env.gameOver` correctly.
-		# Instead, let's use a simpler full-board win check for terminal states.
-		
-		# Check if previous player won (i.e., this is a terminal state)
-		# If we are maximizing, it means the opponent just played to reach this state.
-		# If we are minimizing, it means our player just played to reach this state.
-
-		# This is a common point of confusion. The terminal check in minimax usually
-		# happens *after* a hypothetical move has been made and before calling the next recursion level.
-		# So, `env` here already has the move applied by the *previous* player.
-		
-		# Simplified terminal state checks:
-		# If self can win in this state (meaning the previous move led to self winning)
-		if env.check_win(env.board, 0, 0, self.position): # (0,0,self.position) are dummy values for row, col. Check_win needs to scan full board.
-		# A proper check_win should not require the last move, but rather scan the whole board.
-		# For now, let's just use `_evaluate_position` and define base cases.
-			if not maximizing: # If it's minimizing player's turn, it means our player (self.position) just moved and won
+		# Check if the opponent just won (the player who moved to reach this state)
+		opponent_player = 3 - current_player
+		if self.check_win_full_board(env.board, opponent_player, env.shape):
+			if opponent_player == self.position:
 				return self.MAX_SCORE
-			else: # If it's maximizing player's turn, it means opponent (3-self.position) just moved and won
+			else:
 				return -self.MAX_SCORE
-		
-		if env.check_win(env.board, 0, 0, 3 - self.position):
-			if not maximizing: # If minimizing player's turn, it means opponent just won
-				return -self.MAX_SCORE
-			else: # If maximizing player's turn, it means our player (self.position) just won
-				return self.MAX_SCORE
 
-		# Check for tie
+		# Check for tie (board full)
 		valid_moves = [i for i, pos in enumerate(env.topPosition) if pos >= 0]
 		if not valid_moves:
 			return 0 # Tie
@@ -539,19 +481,37 @@ class alphaBetaAI(connect4Player):
 						break
 			return value
 
-	# The check_win method in alphaBetaAI should be self-contained and scan the board
-	# without needing specific row/col arguments, or be adapted to use env's methods.
-	# I will modify this to correctly call env's check_win or implement its own.
-	# For now, let's ensure env.check_win is functional and use that.
-	def check_win(self, env, player):
-		# Delegate to the connect4 env's check_win which is more robust
-		# This is a simplified call, as env.check_win expects last_move (row, col)
-		# For a general check, iterate all cells and then check for 4 in a row from there.
-		# A better implementation of a general board check:
-		# Check horizontal, vertical, and both diagonals across the entire board.
-		shape = env.shape
-		board = env.board
-		
+	def check_win_at_position(self, board, row, col, player, shape):
+		"""Check if placing a piece at (row, col) creates a win for player"""
+		# Check horizontal
+		for c in range(max(0, col - 3), min(col + 4, shape[1])):
+			if c + 3 < shape[1]:
+				if all(board[row][c + i] == player for i in range(4)):
+					return True
+
+		# Check vertical
+		for r in range(max(0, row - 3), min(row + 4, shape[0])):
+			if r + 3 < shape[0]:
+				if all(board[r + i][col] == player for i in range(4)):
+					return True
+
+		# Check diagonal (positive slope)
+		for i in range(-3, 4):
+			r, c = row + i, col + i
+			if 0 <= r < shape[0] - 3 and 0 <= c < shape[1] - 3:
+				if all(board[r + j][c + j] == player for j in range(4)):
+					return True
+
+		# Check diagonal (negative slope)
+		for i in range(-3, 4):
+			r, c = row + i, col - i
+			if 0 <= r < shape[0] - 3 and 0 <= c < shape[1] - 3:
+				if all(board[r + j][c - j] == player for j in range(4)):
+					return True
+		return False
+
+	def check_win_full_board(self, board, player, shape):
+		"""Check if player has won anywhere on the board"""
 		# Check horizontal
 		for r in range(shape[0]):
 			for c in range(shape[1] - 3):

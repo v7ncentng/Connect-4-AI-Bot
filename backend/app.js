@@ -42,7 +42,7 @@ export default function Connect4Board() {
     if (!playerTurn || gameOver) return;
 
     try {
-      const res = await fetch('http://localhost:5000/move', {
+      const res = await fetch('http://localhost:5001/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ column: col })
