@@ -32,8 +32,4 @@ npm start
 # App runs on http://localhost:3000
 ```
 
----
 
-**Ready to test your Connect 4 skills against an AI that never sleeps, never makes mistakes, and always thinks three steps ahead of you?**
-
-## 🎯 **[PLAY NOW →](http://localhost:3000)** *Can you beat the machine?*
