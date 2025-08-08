@@ -8,7 +8,7 @@
 | 🤔 **Minimax AI** | Easy | Classic game theory approach |
 | 🎯 **Monte Carlo AI** | Intermediate | Probabilistic tree search mastery |
 | 🧠 **Alpha-Beta AI** | Expert | Optimized minimax with pruning perfection |
-| 👥 **Human vs Human** | Friendship-Ending | Local multiplayer madness |
+| 👥 **Human vs Human** | N/A | Local multiplayer fun! |
 
 ---
 
