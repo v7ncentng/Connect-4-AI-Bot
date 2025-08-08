@@ -1,5 +1,5 @@
 ## Think you can outsmart our intelligent AI? Think again. 
-** My Alpha-Beta pruning algorithm doesn't just play Connect 4 – it *dominates* it. With lightning-fast calculations and strategic depth that would make chess grandmasters jealous, this isn't your childhood Connect 4 game.
+My Alpha-Beta pruning algorithm doesn't just play Connect 4 – it *dominates* it.
 
 ## 🎮 **Choose Your Challenge**
 
