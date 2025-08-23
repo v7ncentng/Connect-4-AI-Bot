@@ -1,7 +1,7 @@
 ## Think you can outsmart our intelligent AI? Think again. 
 My Alpha-Beta pruning algorithm doesn't just play Connect 4 – it *dominates* it.
 
-## 🎮 **Choose Your Challenge**
+## **Choose Your Challenge**
 
 | Opponent | Difficulty | Description |
 |----------|------------|-------------|
@@ -13,7 +13,7 @@ My Alpha-Beta pruning algorithm doesn't just play Connect 4 – it *dominates* i
 
 ---
 
-## 🛠️ **Quick Start**
+## **Quick Start**
 
 **⚠️ Important:** This game requires both frontend and backend to run simultaneously!
 
